@@ -518,6 +518,129 @@ local function isMergedRecordName(name)
     return name:match("^Merged_") ~= nil or name:match("^MergedNoJeda_") ~= nil
 end
 
+-- ==================== DELTA ENCODING ====================
+local DELTA_PRECISION = 1000 -- 3 desimal
+
+local function roundN(v, n)
+    return math.floor(v * n + 0.5) / n
+end
+
+local function encodeDelta(frames)
+    if not frames or #frames == 0 then return frames end
+    local encoded = {}
+    local prev = nil
+    for i, f in ipairs(frames) do
+        if i == 1 then
+            local full = {}
+            for k,v in pairs(f) do full[k] = v end
+            full._delta = false
+            table.insert(encoded, full)
+            prev = f
+        else
+            local d = { _delta = true }
+            local dpx = roundN(f.position.x - prev.position.x, DELTA_PRECISION)
+            local dpy = roundN(f.position.y - prev.position.y, DELTA_PRECISION)
+            local dpz = roundN(f.position.z - prev.position.z, DELTA_PRECISION)
+            if dpx ~= 0 or dpy ~= 0 or dpz ~= 0 then
+                d.dp = { x = dpx, y = dpy, z = dpz }
+            end
+            local dvx = roundN(f.velocity.x - prev.velocity.x, DELTA_PRECISION)
+            local dvy = roundN(f.velocity.y - prev.velocity.y, DELTA_PRECISION)
+            local dvz = roundN(f.velocity.z - prev.velocity.z, DELTA_PRECISION)
+            if dvx ~= 0 or dvy ~= 0 or dvz ~= 0 then
+                d.dv = { x = dvx, y = dvy, z = dvz }
+            end
+            local dr = roundN(f.rotation - prev.rotation, DELTA_PRECISION)
+            if dr ~= 0 then d.dr = dr end
+            d.dt = roundN(f.time - prev.time, DELTA_PRECISION)
+            local mdx = roundN(f.moveDirection.x - prev.moveDirection.x, DELTA_PRECISION)
+            local mdz = roundN(f.moveDirection.z - prev.moveDirection.z, DELTA_PRECISION)
+            if mdx ~= 0 or mdz ~= 0 then
+                d.dmd = { x = mdx, z = mdz }
+            end
+            local crx = roundN(f.cf_right.x - prev.cf_right.x, DELTA_PRECISION)
+            local cry = roundN(f.cf_right.y - prev.cf_right.y, DELTA_PRECISION)
+            local crz = roundN(f.cf_right.z - prev.cf_right.z, DELTA_PRECISION)
+            if crx ~= 0 or cry ~= 0 or crz ~= 0 then
+                d.dcr = { x = crx, y = cry, z = crz }
+            end
+            local cux = roundN(f.cf_up.x - prev.cf_up.x, DELTA_PRECISION)
+            local cuy = roundN(f.cf_up.y - prev.cf_up.y, DELTA_PRECISION)
+            local cuz = roundN(f.cf_up.z - prev.cf_up.z, DELTA_PRECISION)
+            if cux ~= 0 or cuy ~= 0 or cuz ~= 0 then
+                d.dcu = { x = cux, y = cuy, z = cuz }
+            end
+            local dgl = roundN(f.groundLevel - prev.groundLevel, DELTA_PRECISION)
+            if dgl ~= 0 then d.dgl = dgl end
+            if f.walkSpeed ~= prev.walkSpeed then d.ws = f.walkSpeed end
+            if f.hipHeight ~= prev.hipHeight then d.hh = f.hipHeight end
+            if f.state ~= prev.state then d.st = f.state end
+            if f.jumping ~= prev.jumping then d.jmp = f.jumping end
+            table.insert(encoded, d)
+            prev = f
+        end
+    end
+    return encoded
+end
+
+local function decodeDelta(encoded)
+    if not encoded or #encoded == 0 then return encoded end
+    if encoded[1]._delta == nil then return encoded end
+    local decoded = {}
+    local prev = nil
+    for _, d in ipairs(encoded) do
+        if not d._delta then
+            local f = {}
+            for k,v in pairs(d) do f[k] = v end
+            f._delta = nil
+            table.insert(decoded, f)
+            prev = f
+        else
+            local f = {}
+            local dp = d.dp or { x=0, y=0, z=0 }
+            f.position = {
+                x = prev.position.x + (dp.x or 0),
+                y = prev.position.y + (dp.y or 0),
+                z = prev.position.z + (dp.z or 0),
+            }
+            local dv = d.dv or { x=0, y=0, z=0 }
+            f.velocity = {
+                x = prev.velocity.x + (dv.x or 0),
+                y = prev.velocity.y + (dv.y or 0),
+                z = prev.velocity.z + (dv.z or 0),
+            }
+            f.rotation = prev.rotation + (d.dr or 0)
+            f.time = prev.time + (d.dt or 0)
+            local dmd = d.dmd or { x=0, z=0 }
+            f.moveDirection = {
+                x = prev.moveDirection.x + (dmd.x or 0),
+                y = 0,
+                z = prev.moveDirection.z + (dmd.z or 0),
+            }
+            local dcr = d.dcr or { x=0, y=0, z=0 }
+            f.cf_right = {
+                x = prev.cf_right.x + (dcr.x or 0),
+                y = prev.cf_right.y + (dcr.y or 0),
+                z = prev.cf_right.z + (dcr.z or 0),
+            }
+            local dcu = d.dcu or { x=0, y=0, z=0 }
+            f.cf_up = {
+                x = prev.cf_up.x + (dcu.x or 0),
+                y = prev.cf_up.y + (dcu.y or 0),
+                z = prev.cf_up.z + (dcu.z or 0),
+            }
+            f.groundLevel = prev.groundLevel + (d.dgl or 0)
+            f.walkSpeed = d.ws ~= nil and d.ws or prev.walkSpeed
+            f.hipHeight = d.hh ~= nil and d.hh or prev.hipHeight
+            f.state = d.st ~= nil and d.st or prev.state
+            f.jumping = d.jmp ~= nil and d.jmp or prev.jumping
+            table.insert(decoded, f)
+            prev = f
+        end
+    end
+    return decoded
+end
+
 local function startRecording()
     if isPlaying then
         notif("❌ Hentikan playback dulu", Color3.fromRGB(255,100,100))
@@ -694,163 +817,6 @@ local function refreshRecords()
     sortRecords(savedRecords)
     sortRecords(checkpointRecords)
     sortRecords(mergedRecords)
-end
-
--- ==================== DELTA ENCODING ====================
-local DELTA_PRECISION = 1000 -- 3 desimal
-
-local function roundN(v, n)
-    return math.floor(v * n + 0.5) / n
-end
-
-local function encodeDelta(frames)
-    if not frames or #frames == 0 then return frames end
-    local encoded = {}
-    local prev = nil
-    for i, f in ipairs(frames) do
-        if i == 1 then
-            -- Frame pertama disimpan penuh
-            local full = {}
-            for k,v in pairs(f) do full[k] = v end
-            full._delta = false
-            table.insert(encoded, full)
-            prev = f
-        else
-            -- Frame berikutnya hanya simpan delta (selisih)
-            local d = { _delta = true }
-            -- position delta
-            local dpx = roundN(f.position.x - prev.position.x, DELTA_PRECISION)
-            local dpy = roundN(f.position.y - prev.position.y, DELTA_PRECISION)
-            local dpz = roundN(f.position.z - prev.position.z, DELTA_PRECISION)
-            if dpx ~= 0 or dpy ~= 0 or dpz ~= 0 then
-                d.dp = { x = dpx, y = dpy, z = dpz }
-            end
-            -- velocity delta
-            local dvx = roundN(f.velocity.x - prev.velocity.x, DELTA_PRECISION)
-            local dvy = roundN(f.velocity.y - prev.velocity.y, DELTA_PRECISION)
-            local dvz = roundN(f.velocity.z - prev.velocity.z, DELTA_PRECISION)
-            if dvx ~= 0 or dvy ~= 0 or dvz ~= 0 then
-                d.dv = { x = dvx, y = dvy, z = dvz }
-            end
-            -- rotation delta
-            local dr = roundN(f.rotation - prev.rotation, DELTA_PRECISION)
-            if dr ~= 0 then d.dr = dr end
-            -- time delta
-            d.dt = roundN(f.time - prev.time, DELTA_PRECISION)
-            -- moveDirection delta
-            local mdx = roundN(f.moveDirection.x - prev.moveDirection.x, DELTA_PRECISION)
-            local mdz = roundN(f.moveDirection.z - prev.moveDirection.z, DELTA_PRECISION)
-            if mdx ~= 0 or mdz ~= 0 then
-                d.dmd = { x = mdx, z = mdz }
-            end
-            -- cf_right delta
-            local crx = roundN(f.cf_right.x - prev.cf_right.x, DELTA_PRECISION)
-            local cry = roundN(f.cf_right.y - prev.cf_right.y, DELTA_PRECISION)
-            local crz = roundN(f.cf_right.z - prev.cf_right.z, DELTA_PRECISION)
-            if crx ~= 0 or cry ~= 0 or crz ~= 0 then
-                d.dcr = { x = crx, y = cry, z = crz }
-            end
-            -- cf_up delta
-            local cux = roundN(f.cf_up.x - prev.cf_up.x, DELTA_PRECISION)
-            local cuy = roundN(f.cf_up.y - prev.cf_up.y, DELTA_PRECISION)
-            local cuz = roundN(f.cf_up.z - prev.cf_up.z, DELTA_PRECISION)
-            if cux ~= 0 or cuy ~= 0 or cuz ~= 0 then
-                d.dcu = { x = cux, y = cuy, z = cuz }
-            end
-            -- groundLevel delta
-            local dgl = roundN(f.groundLevel - prev.groundLevel, DELTA_PRECISION)
-            if dgl ~= 0 then d.dgl = dgl end
-            -- walkSpeed (simpan hanya jika berubah)
-            if f.walkSpeed ~= prev.walkSpeed then d.ws = f.walkSpeed end
-            -- hipHeight (simpan hanya jika berubah)
-            if f.hipHeight ~= prev.hipHeight then d.hh = f.hipHeight end
-            -- state (simpan hanya jika berubah)
-            if f.state ~= prev.state then d.st = f.state end
-            -- jumping (simpan hanya jika berubah)
-            if f.jumping ~= prev.jumping then d.jmp = f.jumping end
-
-            table.insert(encoded, d)
-            prev = f
-        end
-    end
-    return encoded
-end
-
-local function decodeDelta(encoded)
-    if not encoded or #encoded == 0 then return encoded end
-    -- Cek apakah ini format delta atau format lama (full frames)
-    if encoded[1]._delta == nil then
-        -- Format lama, kembalikan apa adanya
-        return encoded
-    end
-    local decoded = {}
-    local prev = nil
-    for i, d in ipairs(encoded) do
-        if not d._delta then
-            -- Frame penuh
-            local f = {}
-            for k,v in pairs(d) do f[k] = v end
-            f._delta = nil
-            table.insert(decoded, f)
-            prev = f
-        else
-            -- Rekonstruksi dari delta
-            local f = {}
-            -- position
-            local dp = d.dp or { x=0, y=0, z=0 }
-            f.position = {
-                x = prev.position.x + (dp.x or 0),
-                y = prev.position.y + (dp.y or 0),
-                z = prev.position.z + (dp.z or 0),
-            }
-            -- velocity
-            local dv = d.dv or { x=0, y=0, z=0 }
-            f.velocity = {
-                x = prev.velocity.x + (dv.x or 0),
-                y = prev.velocity.y + (dv.y or 0),
-                z = prev.velocity.z + (dv.z or 0),
-            }
-            -- rotation
-            f.rotation = prev.rotation + (d.dr or 0)
-            -- time
-            f.time = prev.time + (d.dt or 0)
-            -- moveDirection
-            local dmd = d.dmd or { x=0, z=0 }
-            f.moveDirection = {
-                x = prev.moveDirection.x + (dmd.x or 0),
-                y = 0,
-                z = prev.moveDirection.z + (dmd.z or 0),
-            }
-            -- cf_right
-            local dcr = d.dcr or { x=0, y=0, z=0 }
-            f.cf_right = {
-                x = prev.cf_right.x + (dcr.x or 0),
-                y = prev.cf_right.y + (dcr.y or 0),
-                z = prev.cf_right.z + (dcr.z or 0),
-            }
-            -- cf_up
-            local dcu = d.dcu or { x=0, y=0, z=0 }
-            f.cf_up = {
-                x = prev.cf_up.x + (dcu.x or 0),
-                y = prev.cf_up.y + (dcu.y or 0),
-                z = prev.cf_up.z + (dcu.z or 0),
-            }
-            -- groundLevel
-            f.groundLevel = prev.groundLevel + (d.dgl or 0)
-            -- walkSpeed
-            f.walkSpeed = d.ws ~= nil and d.ws or prev.walkSpeed
-            -- hipHeight
-            f.hipHeight = d.hh ~= nil and d.hh or prev.hipHeight
-            -- state
-            f.state = d.st ~= nil and d.st or prev.state
-            -- jumping
-            f.jumping = d.jmp ~= nil and d.jmp or prev.jumping
-
-            table.insert(decoded, f)
-            prev = f
-        end
-    end
-    return decoded
 end
 
 -- ==================== KOMPRESI ====================
@@ -1360,7 +1326,7 @@ local function createGUI()
     gui.Parent = LP:WaitForChild("PlayerGui")
     createAdminPanel(gui)
 
-    local W, H = 334, 560
+    local W, H = 334, 530
     originalHeight = H
     
     local frame = Instance.new("Frame", gui)
@@ -1535,7 +1501,7 @@ local function createGUI()
     listFrame.BackgroundColor3 = Color3.fromRGB(14,17,28)
     listFrame.BorderSizePixel = 0
     listFrame.Position = UDim2.new(0,12,0,272)
-    listFrame.Size = UDim2.new(1,-24,0,190)
+    listFrame.Size = UDim2.new(1,-24,0,150)
     listFrame.ScrollBarThickness = 4
     listFrame.ScrollBarImageColor3 = Color3.fromRGB(116,176,255)
     listFrame.CanvasSize = UDim2.new(0,0,0,0)
@@ -1552,16 +1518,17 @@ local function createGUI()
     lp2.PaddingLeft = UDim.new(0,6)
     lp2.PaddingRight = UDim.new(0,6)
 
-    mkDiv(470)
-    mkLbl(476, "MERGE")
-    local mergeNameBox = mkInput(12,494,208,28,"Nama hasil merge (wajib)")
-    local mergeBtn = mkBtn(228,494,94,28,"🔗 MERGE",94,48,170)
+    -- listFrame berakhir di Y=422+36=458 (contentContainer offset 36)
+    mkDiv(430)
+    mkLbl(436, "MERGE")
+    local mergeNameBox = mkInput(12,454,208,26,"Nama hasil merge (wajib)")
+    local mergeBtn = mkBtn(228,454,94,26,"🔗 MERGE",94,48,170)
 
     notifLabel = Instance.new("TextLabel", contentContainer)
     notifLabel.BackgroundColor3 = Color3.fromRGB(34, 56, 99)
     notifLabel.BorderSizePixel = 0
-    notifLabel.Position = UDim2.new(0,12,0,528)
-    notifLabel.Size = UDim2.new(1,-24,0,24)
+    notifLabel.Position = UDim2.new(0,12,0,486)
+    notifLabel.Size = UDim2.new(1,-24,0,22)
     notifLabel.Font = Enum.Font.Gotham
     notifLabel.Text = ""
     notifLabel.TextColor3 = Color3.fromRGB(255,255,255)
