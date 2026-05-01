@@ -1327,35 +1327,61 @@ local function cleanupAll()
     notifLabel = nil
 end
 
--- ==================== GUI DENGAN LAYOUT RAPAT ====================
+-- ==================== GUI MOBILE-FRIENDLY ====================
 local function createGUI()
     local old = LP.PlayerGui:FindFirstChild("LeoXDRecorder")
     if old then old:Destroy() end
+    local oldMob = LP.PlayerGui:FindFirstChild("LeoXDMobileRec")
+    if oldMob then oldMob:Destroy() end
+
+    local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
     local gui = Instance.new("ScreenGui")
     gui.Name = "LeoXDRecorder"
     gui.ResetOnSpawn = false
+    gui.IgnoreGuiInset = true
     gui.Parent = LP:WaitForChild("PlayerGui")
     createAdminPanel(gui)
 
-    local W, H = 334, 530
+    local W = isMobile and 320 or 310
+    local H = isMobile and 560 or 510
+    local BTN_H = isMobile and 38 or 30
+    local TXT = isMobile and 13 or 11
     originalHeight = H
-    
+
     local frame = Instance.new("Frame", gui)
     frame.BackgroundColor3 = Color3.fromRGB(12, 14, 22)
     frame.BorderSizePixel = 0
-    frame.Position = UDim2.new(0.5,-W/2,0.5,-H/2)
-    frame.Size = UDim2.new(0,W,0,H)
+    frame.Position = UDim2.new(0.5, -W/2, 0.5, -H/2)
+    frame.Size = UDim2.new(0, W, 0, H)
     frame.Active = true
-    frame.Draggable = true
-    local frameCorner = Instance.new("UICorner")
-    frameCorner.CornerRadius = UDim.new(0,12)
-    frameCorner.Parent = frame
+    frame.Draggable = not isMobile
+    local frameCorner = Instance.new("UICorner", frame)
+    frameCorner.CornerRadius = UDim.new(0, 12)
     guiFrame = frame
 
     local fs = Instance.new("UIStroke", frame)
     fs.Color = Color3.fromRGB(130, 180, 255)
     fs.Thickness = 1.8
+
+    -- Drag manual untuk mobile
+    if isMobile then
+        local dragging, dragStart, startPos = false, nil, nil
+        frame.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true; dragStart = input.Position; startPos = frame.Position
+            end
+        end)
+        frame.InputChanged:Connect(function(input)
+            if dragging and input.UserInputType == Enum.UserInputType.Touch then
+                local d = input.Position - dragStart
+                frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+            end
+        end)
+        frame.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.Touch then dragging = false end
+        end)
+    end
 
     -- Title bar
     local titleBar = Instance.new("Frame", frame)
@@ -1401,328 +1427,352 @@ local function createGUI()
     closeBtn.TextColor3 = Color3.fromRGB(255,255,255)
     closeBtn.TextSize = 12
     local closeCorner = Instance.new("UICorner")
-    closeCorner.CornerRadius = UDim.new(0,6)
-    closeCorner.Parent = closeBtn
+    closeCorner.CornerRadius = UDim.new(0, 6)
 
-    -- Container untuk semua konten
-    local contentContainer = Instance.new("Frame", frame)
-    contentContainer.BackgroundTransparency = 1
-    contentContainer.Position = UDim2.new(0,0,0,36)
-    contentContainer.Size = UDim2.new(1,0,1,-36)
+    -- Content container
+    local cc = Instance.new("Frame", frame)
+    cc.BackgroundTransparency = 1
+    cc.Position = UDim2.new(0, 0, 0, 36)
+    cc.Size = UDim2.new(1, 0, 1, -36)
     
-    -- ========== KOMPONEN GUI (Y diatur rapat dari 0) ==========
-    local function mkBtn(x,y,w,h,text,r,g,b)
-        local btn = Instance.new("TextButton", contentContainer)
-        btn.BackgroundColor3 = Color3.fromRGB(r,g,b)
+    -- ========== KOMPONEN GUI MOBILE-FRIENDLY ==========
+
+
+    local PAD = 10
+    local IW = W - PAD * 2
+
+    local function mkBtn(x, y, w, h, text, r, g, b)
+        local btn = Instance.new("TextButton", cc)
+        btn.BackgroundColor3 = Color3.fromRGB(r, g, b)
         btn.BorderSizePixel = 0
-        btn.Position = UDim2.new(0,x,0,y)
-        btn.Size = UDim2.new(0,w,0,h)
+        btn.Position = UDim2.new(0, x, 0, y)
+        btn.Size = UDim2.new(0, w, 0, h)
         btn.Font = Enum.Font.GothamBold
         btn.Text = text
-        btn.TextColor3 = Color3.fromRGB(255,255,255)
-        btn.TextSize = 12
-        local btnCorner = Instance.new("UICorner")
-        btnCorner.CornerRadius = UDim.new(0,8)
-        btnCorner.Parent = btn
-        local stroke = Instance.new("UIStroke")
-        stroke.Color = Color3.fromRGB(255,255,255)
-        stroke.Transparency = 0.88
-        stroke.Thickness = 1
-        stroke.Parent = btn
+        btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        btn.TextSize = TXT
+        btn.AutoButtonColor = true
+        local c = Instance.new("UICorner", btn); c.CornerRadius = UDim.new(0, 8)
+        local s = Instance.new("UIStroke", btn)
+        s.Color = Color3.fromRGB(255,255,255); s.Transparency = 0.88; s.Thickness = 1
         return btn
     end
 
     local function mkDiv(y)
-        local d = Instance.new("Frame", contentContainer)
-        d.BackgroundColor3 = Color3.fromRGB(33,43,66)
+        local d = Instance.new("Frame", cc)
+        d.BackgroundColor3 = Color3.fromRGB(33, 43, 66)
         d.BorderSizePixel = 0
-        d.Position = UDim2.new(0,12,0,y)
-        d.Size = UDim2.new(1,-24,0,1.5)
+        d.Position = UDim2.new(0, PAD, 0, y)
+        d.Size = UDim2.new(1, -PAD*2, 0, 1)
     end
 
-    local function mkLbl(y,text)
-        local lbl = Instance.new("TextLabel", contentContainer)
+    local function mkLbl(y, text)
+        local lbl = Instance.new("TextLabel", cc)
         lbl.BackgroundTransparency = 1
-        lbl.Position = UDim2.new(0,12,0,y)
-        lbl.Size = UDim2.new(1,-24,0,16)
+        lbl.Position = UDim2.new(0, PAD, 0, y)
+        lbl.Size = UDim2.new(1, -PAD*2, 0, 16)
         lbl.Font = Enum.Font.GothamBold
         lbl.Text = text
-        lbl.TextColor3 = Color3.fromRGB(144,200,255)
-        lbl.TextSize = 11
+        lbl.TextColor3 = Color3.fromRGB(144, 200, 255)
+        lbl.TextSize = TXT
         lbl.TextXAlignment = Enum.TextXAlignment.Left
     end
 
-    local function mkInput(x,y,w,h,placeholder)
-        local box = Instance.new("TextBox", contentContainer)
+    local function mkInput(x, y, w, h, placeholder)
+        local box = Instance.new("TextBox", cc)
         box.BackgroundColor3 = Color3.fromRGB(18, 22, 34)
         box.BorderSizePixel = 0
-        box.Position = UDim2.new(0,x,0,y)
-        box.Size = UDim2.new(0,w,0,h)
+        box.Position = UDim2.new(0, x, 0, y)
+        box.Size = UDim2.new(0, w, 0, h)
         box.Font = Enum.Font.Gotham
         box.Text = ""
-        box.TextColor3 = Color3.fromRGB(235,240,255)
+        box.TextColor3 = Color3.fromRGB(235, 240, 255)
         box.PlaceholderText = placeholder
-        box.PlaceholderColor3 = Color3.fromRGB(122,132,162)
-        box.TextSize = 11
+        box.PlaceholderColor3 = Color3.fromRGB(122, 132, 162)
+        box.TextSize = TXT
         box.ClearTextOnFocus = false
         box.TextXAlignment = Enum.TextXAlignment.Left
-        local pad = Instance.new("UIPadding", box)
-        pad.PaddingLeft = UDim.new(0,8)
-        local boxCorner = Instance.new("UICorner")
-        boxCorner.CornerRadius = UDim.new(0,8)
-        boxCorner.Parent = box
-        local boxStroke = Instance.new("UIStroke")
-        boxStroke.Color = Color3.fromRGB(102,127,175)
-        boxStroke.Transparency = 0.7
-        boxStroke.Thickness = 1
-        boxStroke.Parent = box
+        local pad = Instance.new("UIPadding", box); pad.PaddingLeft = UDim.new(0, 8)
+        local c = Instance.new("UICorner", box); c.CornerRadius = UDim.new(0, 8)
+        local s = Instance.new("UIStroke", box)
+        s.Color = Color3.fromRGB(102,127,175); s.Transparency = 0.7; s.Thickness = 1
         return box
     end
 
-    mkLbl(0, "RECORD")
-    local checkpointNameBox = mkInput(12,18,310,26,"Nama checkpoint (opsional)")
-    local recBtn = mkBtn(12,50,150,32,"🔴 REC",189,66,92)
-    local stpBtn = mkBtn(172,50,150,32,"⏹ SAVE",62,128,187)
+    local cy = 4
+    local BW2 = math.floor((IW - 4) / 2)
+    local BW3 = math.floor((IW - 8) / 3)
 
-    local recStatus = Instance.new("TextLabel", contentContainer)
+    -- RECORD
+    mkLbl(cy, "RECORD"); cy = cy + 18
+    local checkpointNameBox = mkInput(PAD, cy, IW, BTN_H - 4, "Nama checkpoint (opsional)"); cy = cy + BTN_H
+    local recBtn  = mkBtn(PAD,           cy, BW2, BTN_H, "REC",  189, 66,  92)
+    local stpBtn  = mkBtn(PAD + BW2 + 4, cy, BW2, BTN_H, "SAVE", 62,  128, 187)
+    cy = cy + BTN_H + 4
+
+    local recStatus = Instance.new("TextLabel", cc)
     recStatus.BackgroundTransparency = 1
-    recStatus.Position = UDim2.new(0,12,0,88)
-    recStatus.Size = UDim2.new(1,-24,0,14)
+    recStatus.Position = UDim2.new(0, PAD, 0, cy)
+    recStatus.Size = UDim2.new(1, -PAD*2, 0, 14)
     recStatus.Font = Enum.Font.Gotham
-    recStatus.Text = "Siap | F = Record"
-    recStatus.TextColor3 = Color3.fromRGB(100,255,150)
-    recStatus.TextSize = 11
+    recStatus.Text = "Siap"
+    recStatus.TextColor3 = Color3.fromRGB(100, 255, 150)
+    recStatus.TextSize = TXT
     recStatus.TextXAlignment = Enum.TextXAlignment.Left
+    cy = cy + 18
 
-    mkDiv(108)
+    mkDiv(cy); cy = cy + 6
 
-    mkLbl(116, "PLAYBACK")
-    local playStartBtn = mkBtn(12,134,100,30,"▶ START",78,62,180)
-    local playNearestBtn = mkBtn(120,134,100,30,"📍 NEAREST",48,118,172)
-    local pauseBtn = mkBtn(228,134,94,30,"⏸ PAUSE",164,118,48)
-    local stopBtn2 = mkBtn(12,170,100,30,"⏹ STOP",170,60,86)
-    local loopBtn = mkBtn(120,170,100,30,"🔁 LOOP: OFF",55,60,98)
-    local savePosBtn = mkBtn(228,170,94,30,"💾 Save",62,114,74)
-    local loadPosBtn = mkBtn(228,206,94,30,"📂 Load",70,92,152)
+    -- PLAYBACK
+    mkLbl(cy, "PLAYBACK"); cy = cy + 18
+    local playStartBtn   = mkBtn(PAD,               cy, BW3, BTN_H, "START",    78,  62,  180)
+    local playNearestBtn = mkBtn(PAD + BW3 + 4,     cy, BW3, BTN_H, "NEAR",     48,  118, 172)
+    local pauseBtn       = mkBtn(PAD + (BW3+4)*2,   cy, BW3, BTN_H, "PAUSE",    164, 118, 48)
+    cy = cy + BTN_H + 4
+    local stopBtn2   = mkBtn(PAD,               cy, BW3, BTN_H, "STOP",      170, 60,  86)
+    local loopBtn    = mkBtn(PAD + BW3 + 4,     cy, BW3, BTN_H, "LOOP:OFF",  55,  60,  98)
+    local savePosBtn = mkBtn(PAD + (BW3+4)*2,   cy, BW3, BTN_H, "SAVE POS",  62,  114, 74)
+    cy = cy + BTN_H + 4
+    local loadPosBtn = mkBtn(PAD + (BW3+4)*2,   cy, BW3, BTN_H, "LOAD POS",  70,  92,  152)
+    cy = cy + BTN_H + 4
 
-    mkDiv(244)
-    mkLbl(250, "RECORD LIST")
-    local refreshBtn = mkBtn(250,248,72,24,"🔄",36,58,97)
+    mkDiv(cy); cy = cy + 6
 
-    local listFrame = Instance.new("ScrollingFrame", contentContainer)
-    listFrame.BackgroundColor3 = Color3.fromRGB(14,17,28)
+    -- RECORD LIST
+    mkLbl(cy, "RECORD LIST")
+    local refreshBtn = mkBtn(W - PAD - 60, cy - 2, 60, 20, "REFRESH", 36, 58, 97)
+    cy = cy + 18
+
+    local listH = H - cy - 36 - BTN_H - 36 - 10
+    if listH < 80 then listH = 80 end
+
+    local listFrame = Instance.new("ScrollingFrame", cc)
+    listFrame.BackgroundColor3 = Color3.fromRGB(14, 17, 28)
     listFrame.BorderSizePixel = 0
-    listFrame.Position = UDim2.new(0,12,0,272)
-    listFrame.Size = UDim2.new(1,-24,0,150)
-    listFrame.ScrollBarThickness = 4
-    listFrame.ScrollBarImageColor3 = Color3.fromRGB(116,176,255)
-    listFrame.CanvasSize = UDim2.new(0,0,0,0)
+    listFrame.Position = UDim2.new(0, PAD, 0, cy)
+    listFrame.Size = UDim2.new(1, -PAD*2, 0, listH)
+    listFrame.ScrollBarThickness = isMobile and 6 or 4
+    listFrame.ScrollBarImageColor3 = Color3.fromRGB(116, 176, 255)
+    listFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
     listFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-    local listCorner = Instance.new("UICorner")
-    listCorner.CornerRadius = UDim.new(0,6)
-    listCorner.Parent = listFrame
-
+    local listCorner = Instance.new("UICorner", listFrame); listCorner.CornerRadius = UDim.new(0, 6)
     local ll = Instance.new("UIListLayout", listFrame)
-    ll.Padding = UDim.new(0,4)
-    ll.SortOrder = Enum.SortOrder.LayoutOrder
+    ll.Padding = UDim.new(0, 4); ll.SortOrder = Enum.SortOrder.LayoutOrder
     local lp2 = Instance.new("UIPadding", listFrame)
-    lp2.PaddingTop = UDim.new(0,6)
-    lp2.PaddingLeft = UDim.new(0,6)
-    lp2.PaddingRight = UDim.new(0,6)
+    lp2.PaddingTop = UDim.new(0,6); lp2.PaddingLeft = UDim.new(0,6); lp2.PaddingRight = UDim.new(0,6)
+    cy = cy + listH + 6
 
-    -- listFrame berakhir di Y=422+36=458 (contentContainer offset 36)
-    mkDiv(430)
-    mkLbl(436, "MERGE")
-    local mergeNameBox = mkInput(12,454,208,26,"Nama hasil merge (wajib)")
-    local mergeBtn = mkBtn(228,454,94,26,"🔗 MERGE",94,48,170)
+    mkDiv(cy); cy = cy + 6
 
-    notifLabel = Instance.new("TextLabel", contentContainer)
+    -- MERGE
+    mkLbl(cy, "MERGE"); cy = cy + 18
+    local mergeW = IW - 74
+    local mergeNameBox = mkInput(PAD, cy, mergeW, BTN_H - 4, "Nama merge (wajib)")
+    local mergeBtn = mkBtn(PAD + mergeW + 4, cy, 70, BTN_H - 4, "MERGE", 94, 48, 170)
+    cy = cy + BTN_H + 2
+
+    -- NOTIF
+    notifLabel = Instance.new("TextLabel", cc)
     notifLabel.BackgroundColor3 = Color3.fromRGB(34, 56, 99)
     notifLabel.BorderSizePixel = 0
-    notifLabel.Position = UDim2.new(0,12,0,486)
-    notifLabel.Size = UDim2.new(1,-24,0,22)
+    notifLabel.Position = UDim2.new(0, PAD, 0, cy)
+    notifLabel.Size = UDim2.new(1, -PAD*2, 0, 22)
     notifLabel.Font = Enum.Font.Gotham
     notifLabel.Text = ""
-    notifLabel.TextColor3 = Color3.fromRGB(255,255,255)
-    notifLabel.TextSize = 11
+    notifLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    notifLabel.TextSize = TXT
     notifLabel.TextWrapped = true
     notifLabel.Visible = false
-    local notifCorner = Instance.new("UICorner")
-    notifCorner.CornerRadius = UDim.new(0,6)
-    notifCorner.Parent = notifLabel
+    local notifCorner = Instance.new("UICorner", notifLabel); notifCorner.CornerRadius = UDim.new(0, 6)
 
-    -- ========== LIST RECORD ==========
-    local rowCache = {}
+    -- Mobile: tombol REC mengambang
+    if isMobile then
+        local mobileRecGui = Instance.new("ScreenGui")
+        mobileRecGui.Name = "LeoXDMobileRec"
+        mobileRecGui.ResetOnSpawn = false
+        mobileRecGui.IgnoreGuiInset = true
+        mobileRecGui.Parent = LP:WaitForChild("PlayerGui")
 
-    local function getLayoutOrder(recName)
-        for i,n in ipairs(savedRecords) do if n == recName then return i end end
-        return 9999
+        local mRecBtn = Instance.new("TextButton", mobileRecGui)
+        mRecBtn.BackgroundColor3 = Color3.fromRGB(189, 66, 92)
+        mRecBtn.BorderSizePixel = 0
+        mRecBtn.Position = UDim2.new(0, 12, 0.5, -28)
+        mRecBtn.Size = UDim2.new(0, 56, 0, 56)
+        mRecBtn.Font = Enum.Font.GothamBold
+        mRecBtn.Text = "REC"
+        mRecBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+        mRecBtn.TextSize = 14
+        mRecBtn.ZIndex = 20
+        local mRecCorner = Instance.new("UICorner", mRecBtn); mRecCorner.CornerRadius = UDim.new(1, 0)
+
+        local mDragging, mDragStart, mBtnStart, mMoved = false, nil, nil, false
+        mRecBtn.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.Touch then
+                mDragging = true; mMoved = false
+                mDragStart = input.Position; mBtnStart = mRecBtn.Position
+            end
+        end)
+        mRecBtn.InputChanged:Connect(function(input)
+            if mDragging and input.UserInputType == Enum.UserInputType.Touch then
+                local d = input.Position - mDragStart
+                if d.Magnitude > 8 then mMoved = true end
+                mRecBtn.Position = UDim2.new(mBtnStart.X.Scale, mBtnStart.X.Offset + d.X, mBtnStart.Y.Scale, mBtnStart.Y.Offset + d.Y)
+            end
+        end)
+        mRecBtn.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.Touch then
+                mDragging = false
+                if not mMoved then
+                    if isRecording then
+                        stopRecording()
+                        if guiFrame then guiFrame.Visible = true end
+                        mRecBtn.BackgroundColor3 = Color3.fromRGB(189, 66, 92)
+                        mRecBtn.Text = "REC"
+                    else
+                        startRecording()
+                        if guiFrame then guiFrame.Visible = false end
+                        mRecBtn.BackgroundColor3 = Color3.fromRGB(220, 40, 40)
+                        mRecBtn.Text = "STOP"
+                    end
+                end
+            end
+        end)
     end
+
+    -- LIST RECORD
+    local rowCache = {}
 
     local function addEmptyLabel()
         local e = Instance.new("TextLabel", listFrame)
-        e.Name = "__empty"
-        e.BackgroundTransparency = 1
-        e.Size = UDim2.new(1,-12,0,32)
-        e.Font = Enum.Font.Gotham
-        e.Text = "Belum ada data"
-        e.TextColor3 = Color3.fromRGB(70,80,100)
-        e.TextSize = 11
+        e.Name = "__empty"; e.BackgroundTransparency = 1
+        e.Size = UDim2.new(1, -12, 0, 32); e.Font = Enum.Font.Gotham
+        e.Text = "Belum ada data"; e.TextColor3 = Color3.fromRGB(70, 80, 100); e.TextSize = TXT
     end
 
     local function addSectionHeader(text, layoutOrder)
-        local section = Instance.new("TextLabel", listFrame)
-        section.BackgroundTransparency = 1
-        section.Size = UDim2.new(1,-12,0,18)
-        section.LayoutOrder = layoutOrder
-        section.Font = Enum.Font.GothamBold
-        section.Text = text
-        section.TextColor3 = Color3.fromRGB(145,190,255)
-        section.TextSize = 10
-        section.TextXAlignment = Enum.TextXAlignment.Left
+        local s = Instance.new("TextLabel", listFrame)
+        s.BackgroundTransparency = 1; s.Size = UDim2.new(1, -12, 0, 18)
+        s.LayoutOrder = layoutOrder; s.Font = Enum.Font.GothamBold
+        s.Text = text; s.TextColor3 = Color3.fromRGB(145, 190, 255)
+        s.TextSize = TXT; s.TextXAlignment = Enum.TextXAlignment.Left
     end
 
     local function addRowToList(recName, layoutOrder)
         local isSel = (selectedRecord == recName)
+        local rowH = isMobile and 40 or 34
         local row = Instance.new("Frame", listFrame)
-        row.Name = "row_"..recName
-        row.LayoutOrder = layoutOrder
-        row.BackgroundColor3 = isSel and Color3.fromRGB(35,77,130) or Color3.fromRGB(24,28,40)
-        row.BorderSizePixel = 0
-        row.Size = UDim2.new(1,-12,0,34)
-        local rowCorner = Instance.new("UICorner")
-        rowCorner.CornerRadius = UDim.new(0,6)
-        rowCorner.Parent = row
+        row.Name = "row_" .. recName; row.LayoutOrder = layoutOrder
+        row.BackgroundColor3 = isSel and Color3.fromRGB(35, 77, 130) or Color3.fromRGB(24, 28, 40)
+        row.BorderSizePixel = 0; row.Size = UDim2.new(1, -12, 0, rowH)
+        local rowCorner = Instance.new("UICorner", row); rowCorner.CornerRadius = UDim.new(0, 6)
         rowCache[recName] = row
 
         local nb = Instance.new("TextButton", row)
-        nb.BackgroundTransparency = 1
-        nb.Position = UDim2.new(0,8,0,0)
-        nb.Size = UDim2.new(1,-44,1,0)
+        nb.BackgroundTransparency = 1; nb.Position = UDim2.new(0, 8, 0, 0)
+        nb.Size = UDim2.new(1, -44, 1, 0)
         nb.Font = isSel and Enum.Font.GothamBold or Enum.Font.Gotham
-        nb.Text = (isSel and "▶ " or "  ")..recName
-        nb.TextColor3 = isSel and Color3.fromRGB(0,210,255) or Color3.fromRGB(160,175,200)
-        nb.TextSize = 11
-        nb.TextXAlignment = Enum.TextXAlignment.Left
+        nb.Text = (isSel and "> " or "  ") .. recName
+        nb.TextColor3 = isSel and Color3.fromRGB(0, 210, 255) or Color3.fromRGB(160, 175, 200)
+        nb.TextSize = TXT; nb.TextXAlignment = Enum.TextXAlignment.Left
         nb.TextTruncate = Enum.TextTruncate.AtEnd
         nb.MouseButton1Click:Connect(function()
             if selectedRecord and rowCache[selectedRecord] then
                 local oldRow = rowCache[selectedRecord]
                 if oldRow and oldRow.Parent then
-                    oldRow.BackgroundColor3 = Color3.fromRGB(20,20,30)
+                    oldRow.BackgroundColor3 = Color3.fromRGB(20, 20, 30)
                     local oldNb = oldRow:FindFirstChildOfClass("TextButton")
                     if oldNb then
                         oldNb.Font = Enum.Font.Gotham
-                        oldNb.Text = "  "..selectedRecord
-                        oldNb.TextColor3 = Color3.fromRGB(160,175,200)
+                        oldNb.Text = "  " .. selectedRecord
+                        oldNb.TextColor3 = Color3.fromRGB(160, 175, 200)
                     end
                 end
             end
             selectedRecord = recName
-            row.BackgroundColor3 = Color3.fromRGB(0,70,120)
+            row.BackgroundColor3 = Color3.fromRGB(0, 70, 120)
             nb.Font = Enum.Font.GothamBold
-            nb.Text = "▶ "..recName
-            nb.TextColor3 = Color3.fromRGB(0,210,255)
+            nb.Text = "> " .. recName
+            nb.TextColor3 = Color3.fromRGB(0, 210, 255)
             loadRecord(recName)
         end)
 
         local db = Instance.new("TextButton", row)
-        db.BackgroundColor3 = Color3.fromRGB(122,38,56)
-        db.BorderSizePixel = 0
-        db.Position = UDim2.new(1,-28,0,4)
-        db.Size = UDim2.new(0,22,0,24)
-        db.Font = Enum.Font.GothamBold
-        db.Text = "🗑"
-        db.TextSize = 11
-        db.TextColor3 = Color3.fromRGB(255,255,255)
-        local dbCorner = Instance.new("UICorner")
-        dbCorner.CornerRadius = UDim.new(0,4)
-        dbCorner.Parent = db
+        db.BackgroundColor3 = Color3.fromRGB(122, 38, 56); db.BorderSizePixel = 0
+        db.Position = UDim2.new(1, -30, 0, 4); db.Size = UDim2.new(0, 24, 0, rowH - 8)
+        db.Font = Enum.Font.GothamBold; db.Text = "X"; db.TextSize = TXT
+        db.TextColor3 = Color3.fromRGB(255, 255, 255)
+        local dbCorner = Instance.new("UICorner", db); dbCorner.CornerRadius = UDim.new(0, 4)
         db.MouseButton1Click:Connect(function()
-            row:Destroy()
-            rowCache[recName] = nil
+            row:Destroy(); rowCache[recName] = nil
             if selectedRecord == recName then selectedRecord = nil end
             local hasRows = false
-            for _,c in pairs(listFrame:GetChildren()) do
+            for _, c in pairs(listFrame:GetChildren()) do
                 if c:IsA("Frame") then hasRows = true; break end
             end
             if not hasRows then addEmptyLabel() end
             task.spawn(function()
                 deleteRecord(recName)
-                for i,n in ipairs(savedRecords) do if n == recName then table.remove(savedRecords,i); break end end
+                for i, n in ipairs(savedRecords) do
+                    if n == recName then table.remove(savedRecords, i); break end
+                end
             end)
         end)
     end
 
     renderList = function()
-        for _,c in pairs(listFrame:GetChildren()) do
+        for _, c in pairs(listFrame:GetChildren()) do
             if c:IsA("Frame") or c:IsA("TextLabel") then c:Destroy() end
         end
         rowCache = {}
         if #savedRecords == 0 then addEmptyLabel(); return end
 
         local order = 1
-        addSectionHeader("CHECKPOINT", order)
-        order = order + 1
+        addSectionHeader("CHECKPOINT", order); order = order + 1
         if #checkpointRecords == 0 then
-            local emptyCp = Instance.new("TextLabel", listFrame)
-            emptyCp.BackgroundTransparency = 1
-            emptyCp.Size = UDim2.new(1,-12,0,20)
-            emptyCp.LayoutOrder = order
-            emptyCp.Font = Enum.Font.Gotham
-            emptyCp.Text = "- belum ada checkpoint -"
-            emptyCp.TextColor3 = Color3.fromRGB(92,102,125)
-            emptyCp.TextSize = 10
-            emptyCp.TextXAlignment = Enum.TextXAlignment.Left
-            order = order + 1
+            local e = Instance.new("TextLabel", listFrame)
+            e.BackgroundTransparency = 1; e.Size = UDim2.new(1,-12,0,20); e.LayoutOrder = order
+            e.Font = Enum.Font.Gotham; e.Text = "- belum ada checkpoint -"
+            e.TextColor3 = Color3.fromRGB(92,102,125); e.TextSize = TXT
+            e.TextXAlignment = Enum.TextXAlignment.Left; order = order + 1
         else
-            for _,recName in ipairs(checkpointRecords) do
-                addRowToList(recName, order)
-                order = order + 1
+            for _, recName in ipairs(checkpointRecords) do
+                addRowToList(recName, order); order = order + 1
             end
         end
 
-        addSectionHeader("HASIL MERGE", order)
-        order = order + 1
+        addSectionHeader("HASIL MERGE", order); order = order + 1
         if #mergedRecords == 0 then
-            local emptyMerge = Instance.new("TextLabel", listFrame)
-            emptyMerge.BackgroundTransparency = 1
-            emptyMerge.Size = UDim2.new(1,-12,0,20)
-            emptyMerge.LayoutOrder = order
-            emptyMerge.Font = Enum.Font.Gotham
-            emptyMerge.Text = "- belum ada hasil merge -"
-            emptyMerge.TextColor3 = Color3.fromRGB(92,102,125)
-            emptyMerge.TextSize = 10
-            emptyMerge.TextXAlignment = Enum.TextXAlignment.Left
+            local e = Instance.new("TextLabel", listFrame)
+            e.BackgroundTransparency = 1; e.Size = UDim2.new(1,-12,0,20); e.LayoutOrder = order
+            e.Font = Enum.Font.Gotham; e.Text = "- belum ada hasil merge -"
+            e.TextColor3 = Color3.fromRGB(92,102,125); e.TextSize = TXT
+            e.TextXAlignment = Enum.TextXAlignment.Left
         else
-            for _,recName in ipairs(mergedRecords) do
-                addRowToList(recName, order)
-                order = order + 1
+            for _, recName in ipairs(mergedRecords) do
+                addRowToList(recName, order); order = order + 1
             end
         end
     end
 
     updatePlaybackUI = function(playing) end
 
-    -- Update status text periodik
     task.spawn(function()
         while gui and gui.Parent do
             if isRecording then
-                recStatus.Text = string.format("🔴 %d frame  |  %.1fs", #recordedFrames, tick()-recordStartTime)
-                recStatus.TextColor3 = Color3.fromRGB(255,90,90)
+                recStatus.Text = string.format("REC %d frame  %.1fs", #recordedFrames, tick() - recordStartTime)
+                recStatus.TextColor3 = Color3.fromRGB(255, 90, 90)
             elseif isPlaying and currentData then
                 local pct = math.floor(playbackTime / (currentData.duration or 1) * 100)
-                recStatus.Text = string.format("▶ %.1fs / %.1fs  (%d%%)", playbackTime, currentData.duration or 0, pct)
-                recStatus.TextColor3 = Color3.fromRGB(80,220,130)
+                recStatus.Text = string.format("PLAY %.1fs / %.1fs  (%d%%)", playbackTime, currentData.duration or 0, pct)
+                recStatus.TextColor3 = Color3.fromRGB(80, 220, 130)
             else
-                recStatus.Text = "✅ Siap | F = Record | ORDER DI BIO GUYS"
-                recStatus.TextColor3 = Color3.fromRGB(100,255,150)
+                recStatus.Text = isMobile and "Siap | Tap REC untuk Record" or "Siap | F = Record"
+                recStatus.TextColor3 = Color3.fromRGB(100, 255, 150)
             end
             task.wait(0.2)
         end
     end)
 
-    -- Event tombol
     recBtn.MouseButton1Click:Connect(startRecording)
     stpBtn.MouseButton1Click:Connect(function()
         if isRecording then stopRecording() end
@@ -1743,42 +1793,38 @@ local function createGUI()
     loadPosBtn.MouseButton1Click:Connect(loadPosition)
     loopBtn.MouseButton1Click:Connect(function()
         isLooping = not isLooping
-        loopBtn.Text = isLooping and "🔁 LOOP: ON" or "🔁 LOOP: OFF"
-        loopBtn.BackgroundColor3 = isLooping and Color3.fromRGB(0,120,65) or Color3.fromRGB(35,35,55)
+        loopBtn.Text = isLooping and "LOOP:ON" or "LOOP:OFF"
+        loopBtn.BackgroundColor3 = isLooping and Color3.fromRGB(0, 120, 65) or Color3.fromRGB(55, 60, 98)
     end)
     refreshBtn.MouseButton1Click:Connect(function()
-        refreshRecords()
-        renderList()
-        notif("🔄 Direfresh", Color3.fromRGB(130,190,255),1.5)
+        refreshRecords(); renderList()
+        notif("Direfresh", Color3.fromRGB(130, 190, 255), 1.5)
     end)
     mergeBtn.MouseButton1Click:Connect(function()
         mergeAndCompressAll(mergeNameBox.Text)
-        if mergeNameBox.Text ~= "" then
-            mergeNameBox.Text = ""
-        end
+        mergeNameBox.Text = ""
     end)
 
-    -- Minimize (collapse) logic
     local function toggleCollapse()
         if isCollapsed then
             frame.Size = UDim2.new(0, W, 0, originalHeight)
-            contentContainer.Visible = true
-            minBtn.Text = "—"
+            cc.Visible = true
+            minBtn.Text = "-"
             isCollapsed = false
         else
             frame.Size = UDim2.new(0, W, 0, 36)
-            contentContainer.Visible = false
-            minBtn.Text = "□"
+            cc.Visible = false
+            minBtn.Text = "+"
             isCollapsed = true
         end
     end
     minBtn.MouseButton1Click:Connect(toggleCollapse)
-
-    -- Close total
     closeBtn.MouseButton1Click:Connect(cleanupAll)
 
     refreshRecords()
     renderList()
+end
+
 end
 
 -- ==================== CHARACTER ADDED ====================
@@ -1821,3 +1867,4 @@ sendUsageWebhook()
 createGUI()
 refreshRecords()
 showRecordingIndicator(false)
+
