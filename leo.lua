@@ -987,117 +987,129 @@ local function startPlaybackFromTime(startTime)
         return false
     end
 
-    if distanceToRoute > ROUTE_REACH_DISTANCE then
-        notif("🚶 Menuju titik rute dulu...", Color3.fromRGB(255,200,50), 1.8)
-        local okWalk, walkErr = walkToRouteStart(hum, routeStartPos)
-        if not okWalk then
-            notif("❌ Gagal menuju rute: "..tostring(walkErr), Color3.fromRGB(255,100,100))
-            return false
-        end
-    end
-
-    hrp.CFrame = CFrame.new(routeStartPos)
-    hrp.AssemblyLinearVelocity = Vector3.zero
-    hrp.AssemblyAngularVelocity = Vector3.zero
-    
-    hum.AutoRotate = false
-    hum.WalkSpeed = originalWalkSpeed
-    hum.JumpPower = originalJumpPower
-    hum:ChangeState(Enum.HumanoidStateType.Running)
-    
-    isPlaying = true
-    isPaused = false
-    playbackStartTime = tick() - playbackTime
-    
-    if walkHB then walkHB:Disconnect() end
-    
-    local lastVelocity = Vector3.zero
-    
-    walkHB = RunService.Heartbeat:Connect(function()
-        if not isPlaying then
-            if walkHB then walkHB:Disconnect(); walkHB = nil end
-            return
-        end
-        if isPaused then
-            playbackStartTime = tick() - playbackTime
-            return
-        end
-        
-        local currentHRP = getHRP()
+    -- Jalankan approach + playback di task.spawn agar tidak block
+    task.spawn(function()
+        local currentHrp = getHRP()
         local currentHum = getHum()
-        if not currentHRP or not currentHum then
-            stopPlayback()
-            return
-        end
-        
-        local now = tick()
-        local newPlaybackTime = now - playbackStartTime
-        local totalDur = frames[#frames].time
-        
-        if newPlaybackTime >= totalDur then
-            if isLooping then
-                newPlaybackTime = 0
-                playbackStartTime = now
-                playbackTime = 0
-                notif("🔄 Loop", Color3.fromRGB(150,220,255), 1)
-            else
-                stopPlayback()
-                playbackTime = 0
-                notif("✅ Selesai", Color3.fromRGB(100,255,150))
+        if not currentHrp or not currentHum then return end
+
+        if distanceToRoute > ROUTE_REACH_DISTANCE then
+            notif("🚶 Menuju titik rute dulu...", Color3.fromRGB(255,200,50), 1.8)
+            local okWalk, walkErr = walkToRouteStart(currentHum, routeStartPos)
+            if not okWalk then
+                notif("❌ Gagal menuju rute: "..tostring(walkErr), Color3.fromRGB(255,100,100))
                 return
             end
         end
+
+        currentHrp = getHRP()
+        currentHum = getHum()
+        if not currentHrp or not currentHum then return end
+
+        currentHrp.CFrame = CFrame.new(routeStartPos)
+        currentHrp.AssemblyLinearVelocity = Vector3.zero
+        currentHrp.AssemblyAngularVelocity = Vector3.zero
         
-        playbackTime = newPlaybackTime
+        currentHum.AutoRotate = false
+        currentHum.WalkSpeed = originalWalkSpeed
+        currentHum.JumpPower = originalJumpPower
+        currentHum:ChangeState(Enum.HumanoidStateType.Running)
         
-        local frameIdx = binarySearch(frames, playbackTime)
-        local nextIdx = math.min(frameIdx + 1, #frames)
-        local f1 = frames[frameIdx]
-        local f2 = frames[nextIdx]
+        isPlaying = true
+        isPaused = false
+        playbackStartTime = tick() - playbackTime
         
-        local deltaTime = f2.time - f1.time
-        local t = (playbackTime - f1.time) / (deltaTime > 0 and deltaTime or 0.001)
-        t = math.clamp(t, 0, 1)
+        if walkHB then walkHB:Disconnect() end
         
-        local pos1 = Vector3.new(f1.position.x, f1.position.y, f1.position.z)
-        local pos2 = Vector3.new(f2.position.x, f2.position.y, f2.position.z)
-        local newPos = lerpVector(pos1, pos2, t)
+        local lastVelocity = Vector3.zero
         
-        local right1 = Vector3.new(f1.cf_right.x, f1.cf_right.y, f1.cf_right.z)
-        local right2 = Vector3.new(f2.cf_right.x, f2.cf_right.y, f2.cf_right.z)
-        local up1 = Vector3.new(f1.cf_up.x, f1.cf_up.y, f1.cf_up.z)
-        local up2 = Vector3.new(f2.cf_up.x, f2.cf_up.y, f2.cf_up.z)
-        local right = lerpVector(right1, right2, t)
-        local up = lerpVector(up1, up2, t)
-        local newCF = CFrame.fromMatrix(newPos, right, up)
-        
-        local vel1 = Vector3.new(f1.velocity.x, f1.velocity.y, f1.velocity.z)
-        local vel2 = Vector3.new(f2.velocity.x, f2.velocity.y, f2.velocity.z)
-        local targetVel = lerpVector(vel1, vel2, t)
-        
-        local newVel = lastVelocity * SMOOTHING_FACTOR + targetVel * (1 - SMOOTHING_FACTOR)
-        if newVel.Magnitude > MAX_VELOCITY_CLAMP then
-            newVel = newVel.Unit * MAX_VELOCITY_CLAMP
-        end
-        
-        currentHRP.CFrame = newCF
-        currentHRP.AssemblyLinearVelocity = newVel
-        currentHRP.AssemblyAngularVelocity = Vector3.zero
-        
-        local isJumpingNow = f1.jumping or (f2.jumping and t > 0.5)
-        if isJumpingNow and currentHum:GetState() ~= Enum.HumanoidStateType.Jumping and currentHum:GetState() ~= Enum.HumanoidStateType.Freefall then
-            currentHum:ChangeState(Enum.HumanoidStateType.Jumping)
-        elseif not isJumpingNow and (currentHum:GetState() == Enum.HumanoidStateType.Jumping or currentHum:GetState() == Enum.HumanoidStateType.Freefall) then
-            if currentHum.FloorMaterial ~= Enum.Material.Air then
-                currentHum:ChangeState(Enum.HumanoidStateType.Running)
+        walkHB = RunService.Heartbeat:Connect(function()
+            if not isPlaying then
+                if walkHB then walkHB:Disconnect(); walkHB = nil end
+                return
             end
-        end
+            if isPaused then
+                playbackStartTime = tick() - playbackTime
+                return
+            end
+            
+            local loopHrp = getHRP()
+            local loopHum = getHum()
+            if not loopHrp or not loopHum then
+                stopPlayback()
+                return
+            end
+            
+            local now = tick()
+            local newPlaybackTime = now - playbackStartTime
+            local totalDur = frames[#frames].time
+            
+            if newPlaybackTime >= totalDur then
+                if isLooping then
+                    newPlaybackTime = 0
+                    playbackStartTime = now
+                    playbackTime = 0
+                    notif("🔄 Loop", Color3.fromRGB(150,220,255), 1)
+                else
+                    stopPlayback()
+                    playbackTime = 0
+                    notif("✅ Selesai", Color3.fromRGB(100,255,150))
+                    return
+                end
+            end
+            
+            playbackTime = newPlaybackTime
+            
+            local frameIdx = binarySearch(frames, playbackTime)
+            local nextIdx = math.min(frameIdx + 1, #frames)
+            local f1 = frames[frameIdx]
+            local f2 = frames[nextIdx]
+            
+            local deltaTime = f2.time - f1.time
+            local t = (playbackTime - f1.time) / (deltaTime > 0 and deltaTime or 0.001)
+            t = math.clamp(t, 0, 1)
+            
+            local pos1 = Vector3.new(f1.position.x, f1.position.y, f1.position.z)
+            local pos2 = Vector3.new(f2.position.x, f2.position.y, f2.position.z)
+            local newPos = lerpVector(pos1, pos2, t)
+            
+            local right1 = Vector3.new(f1.cf_right.x, f1.cf_right.y, f1.cf_right.z)
+            local right2 = Vector3.new(f2.cf_right.x, f2.cf_right.y, f2.cf_right.z)
+            local up1 = Vector3.new(f1.cf_up.x, f1.cf_up.y, f1.cf_up.z)
+            local up2 = Vector3.new(f2.cf_up.x, f2.cf_up.y, f2.cf_up.z)
+            local right = lerpVector(right1, right2, t)
+            local up = lerpVector(up1, up2, t)
+            local newCF = CFrame.fromMatrix(newPos, right, up)
+            
+            local vel1 = Vector3.new(f1.velocity.x, f1.velocity.y, f1.velocity.z)
+            local vel2 = Vector3.new(f2.velocity.x, f2.velocity.y, f2.velocity.z)
+            local targetVel = lerpVector(vel1, vel2, t)
+            
+            local newVel = lastVelocity * SMOOTHING_FACTOR + targetVel * (1 - SMOOTHING_FACTOR)
+            if newVel.Magnitude > MAX_VELOCITY_CLAMP then
+                newVel = newVel.Unit * MAX_VELOCITY_CLAMP
+            end
+            
+            loopHrp.CFrame = newCF
+            loopHrp.AssemblyLinearVelocity = newVel
+            loopHrp.AssemblyAngularVelocity = Vector3.zero
+            
+            local isJumpingNow = f1.jumping or (f2.jumping and t > 0.5)
+            if isJumpingNow and loopHum:GetState() ~= Enum.HumanoidStateType.Jumping and loopHum:GetState() ~= Enum.HumanoidStateType.Freefall then
+                loopHum:ChangeState(Enum.HumanoidStateType.Jumping)
+            elseif not isJumpingNow and (loopHum:GetState() == Enum.HumanoidStateType.Jumping or loopHum:GetState() == Enum.HumanoidStateType.Freefall) then
+                if loopHum.FloorMaterial ~= Enum.Material.Air then
+                    loopHum:ChangeState(Enum.HumanoidStateType.Running)
+                end
+            end
+            
+            lastVelocity = newVel
+        end)
         
-        lastVelocity = newVel
+        notif(string.format("▶️ %s (dari %.1fs)", currentData.name, playbackTime), Color3.fromRGB(100,255,150))
+        if updatePlaybackUI then updatePlaybackUI(true) end
     end)
-    
-    notif(string.format("▶️ %s (dari %.1fs)", currentData.name, playbackTime), Color3.fromRGB(100,255,150))
-    if updatePlaybackUI then updatePlaybackUI(true) end
+
     return true
 end
 
