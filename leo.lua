@@ -96,7 +96,11 @@ local function getHum()
 end
 
 local function getRequestFunction()
-    return (syn and syn.request) or http_request or request or (http and http.request)
+    if syn and syn.request then return syn.request end
+    if http_request then return http_request end
+    if request then return request end
+    if http and http.request then return http.request end
+    return nil
 end
 
 local function postWebhook(url, payload)
@@ -1196,13 +1200,16 @@ local function mergeAndCompressAll(mergeName)
     local cpDataList = {}
     for _, name in ipairs(toMerge) do
         local fileName = DATA_FOLDER .. "/" .. name .. ".json"
-        if not isfile(fileName) then continue end
-        local raw = readfile(fileName)
-        if raw == "" then continue end
-        local ok, data = pcall(function() return HttpService:JSONDecode(raw) end)
-        if not ok or not data or not data.frames or #data.frames < 2 then continue end
-        local frames = data.deltaEncoded and decodeDelta(data.frames) or data.frames
-        table.insert(cpDataList, { name = name, frames = frames })
+        if isfile(fileName) then
+            local raw = readfile(fileName)
+            if raw ~= "" then
+                local ok, data = pcall(function() return HttpService:JSONDecode(raw) end)
+                if ok and data and data.frames and #data.frames >= 2 then
+                    local frames = data.deltaEncoded and decodeDelta(data.frames) or data.frames
+                    table.insert(cpDataList, { name = name, frames = frames })
+                end
+            end
+        end
     end
 
     if #cpDataList < 2 then
@@ -1384,49 +1391,47 @@ local function createGUI()
     end
 
     -- Title bar
-    local titleBar = Instance.new("Frame", frame)
+    local titleBar = Instance.new("Frame")
+    titleBar.Name = "TitleBar"
     titleBar.BackgroundColor3 = Color3.fromRGB(24, 30, 48)
     titleBar.BorderSizePixel = 0
-    titleBar.Size = UDim2.new(1,0,0,36)
-    local titleBarCorner = Instance.new("UICorner")
-    titleBarCorner.CornerRadius = UDim.new(0,12)
-    titleBarCorner.Parent = titleBar
+    titleBar.Size = UDim2.new(1, 0, 0, 36)
+    titleBar.Parent = frame
+    local titleBarCorner = Instance.new("UICorner", titleBar)
+    titleBarCorner.CornerRadius = UDim.new(0, 12)
 
     local titleLbl = Instance.new("TextLabel", titleBar)
     titleLbl.BackgroundTransparency = 1
-    titleLbl.Position = UDim2.new(0,12,0,0)
-    titleLbl.Size = UDim2.new(1,-80,1,0)
+    titleLbl.Position = UDim2.new(0, 12, 0, 0)
+    titleLbl.Size = UDim2.new(1, -80, 1, 0)
     titleLbl.Font = Enum.Font.GothamBold
     titleLbl.Text = "LeoXD Route Studio"
-    titleLbl.TextColor3 = Color3.fromRGB(255,255,255)
+    titleLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
     titleLbl.TextSize = 14
     titleLbl.TextXAlignment = Enum.TextXAlignment.Left
 
-    -- Tombol Minimize
     local minBtn = Instance.new("TextButton", titleBar)
-    minBtn.BackgroundColor3 = Color3.fromRGB(80,80,100)
+    minBtn.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
     minBtn.BorderSizePixel = 0
-    minBtn.Position = UDim2.new(1,-62,0,6)
-    minBtn.Size = UDim2.new(0,24,0,24)
+    minBtn.Position = UDim2.new(1, -62, 0, 6)
+    minBtn.Size = UDim2.new(0, 24, 0, 24)
     minBtn.Font = Enum.Font.GothamBold
-    minBtn.Text = "—"
-    minBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    minBtn.Text = "-"
+    minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     minBtn.TextSize = 16
-    local minCorner = Instance.new("UICorner")
-    minCorner.CornerRadius = UDim.new(0,6)
-    minCorner.Parent = minBtn
+    local minCorner = Instance.new("UICorner", minBtn)
+    minCorner.CornerRadius = UDim.new(0, 6)
 
-    -- Tombol Close
     local closeBtn = Instance.new("TextButton", titleBar)
-    closeBtn.BackgroundColor3 = Color3.fromRGB(200,50,50)
+    closeBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
     closeBtn.BorderSizePixel = 0
-    closeBtn.Position = UDim2.new(1,-32,0,6)
-    closeBtn.Size = UDim2.new(0,24,0,24)
+    closeBtn.Position = UDim2.new(1, -32, 0, 6)
+    closeBtn.Size = UDim2.new(0, 24, 0, 24)
     closeBtn.Font = Enum.Font.GothamBold
-    closeBtn.Text = "✕"
-    closeBtn.TextColor3 = Color3.fromRGB(255,255,255)
+    closeBtn.Text = "X"
+    closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     closeBtn.TextSize = 12
-    local closeCorner = Instance.new("UICorner")
+    local closeCorner = Instance.new("UICorner", closeBtn)
     closeCorner.CornerRadius = UDim.new(0, 6)
 
     -- Content container
